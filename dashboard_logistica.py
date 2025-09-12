@@ -3,15 +3,18 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import plotly.express as px
-import os
 import json
 
 # =============================
 # --- Autenticación Google Sheets ---
 # =============================
 try:
-    creds_json = os.environ["GOOGLE_CREDS_JSON"]
-    creds_dict = json.loads(st.secrets["GOOGLE_CREDS_JSON"])
+    # Leer credenciales desde Streamlit Secrets
+    creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+    
+    # Si está guardado como string, convertirlo a dict
+    if isinstance(creds_dict, str):
+        creds_dict = json.loads(creds_dict)
 
     credenciales = Credentials.from_service_account_info(
         creds_dict,
@@ -23,6 +26,7 @@ try:
     worksheet = sh.worksheet("Logistica")
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
+
 except Exception as e:
     st.error("⚠️ No se pudo conectar a Google Sheets: " + str(e))
     df = pd.DataFrame()
