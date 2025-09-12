@@ -11,11 +11,13 @@ import json
 # =============================
 try:
     creds_json = os.environ["GOOGLE_CREDS_JSON"]
-    creds_dict = json.loads(creds_json)
+    creds_dict = json.loads(st.secrets["GOOGLE_CREDS_JSON"])
+
     credenciales = Credentials.from_service_account_info(
         creds_dict,
         scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
     )
+
     gc = gspread.authorize(credenciales)
     sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
     worksheet = sh.worksheet("Logistica")
