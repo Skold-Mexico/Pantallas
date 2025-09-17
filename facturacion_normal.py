@@ -111,7 +111,7 @@ try:
     # Mostrar los cuadritos en cuadrícula
     # -----------------------------
     # Número de cuadritos por fila
-    cuadros_por_fila = 6
+    cuadros_por_fila = 20
     fila = []
 
     for i, row in df.iterrows():
