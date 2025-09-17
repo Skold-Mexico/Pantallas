@@ -107,8 +107,14 @@ try:
     st.markdown("---")
     st.subheader("Estado de Remisiones")
 
-    # Mostrar todos los cuadritos en la misma columna
-    for _, row in df.iterrows():
+    # -----------------------------
+    # Mostrar los cuadritos en cuadrícula
+    # -----------------------------
+    # Número de cuadritos por fila
+    cuadros_por_fila = 6
+    fila = []
+
+    for i, row in df.iterrows():
         if row['EstadoRemision'] == "Surtimiento":
             color = "#007bff"  # azul fuerte
         else:
@@ -117,11 +123,20 @@ try:
                 "#fff3cd" if row['Semaforo'] == "🟡" else
                 "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
             )
-        st.markdown(
-            f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px; color:black;">'
-            f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
-            f'</div>', unsafe_allow_html=True
-        )
+
+        # Crear columna temporal para cada cuadro
+        fila.append((row['Remision'], row['Semaforo'], color))
+
+        # Cuando la fila llega a cuadros_por_fila o es el último elemento, se imprime
+        if len(fila) == cuadros_por_fila or i == df.index[-1]:
+            cols = st.columns(len(fila))
+            for c, (rem, sem, col_color) in zip(cols, fila):
+                c.markdown(
+                    f'<div style="background-color:{col_color}; border-radius:6px; padding:10px; text-align:center; margin-bottom:5px; color:black;">'
+                    f'<strong>{rem}</strong><br>{sem}</div>',
+                    unsafe_allow_html=True
+                )
+            fila = []  # Reiniciar fila
 
     # Leyenda
     st.markdown("---")
@@ -141,3 +156,4 @@ try:
 except Exception as e:
     st.error(f"Se produjo un error: {str(e)}")
     st.info("Por favor, verifica la conexión con Google Sheets y los permisos de acceso.")
+
