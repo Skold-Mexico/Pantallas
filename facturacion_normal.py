@@ -94,9 +94,6 @@ col4.metric("🔴 En Rojo", (df['Semaforo'] == "🔴").sum())
 
 st.markdown("---")
 
-# =============================
-# --- HTML/CSS para cuadritos ---
-# =============================
 import re
 
 # ==============================
@@ -111,34 +108,36 @@ if 'Remision' in df.columns:
 # ==============================
 # --- HTML/CSS para cuadritos ---
 # ==============================
-html = """
-<style>
-.block-container {padding:0rem;}
-.grid-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-  gap: 2px;
-}
-.grid-item {
-  border-radius: 6px;
-  padding: 5px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: bold;
-  color: black;
-}
-.verde { background-color: #d4edda; }
-.amarillo { background-color: #fff3cd; }
-.rojo { background-color: #f8d7da; }
-.neutro { background-color: #e9ecef; }
-</style>
-<div class="grid-container">
-"""
+html = (
+    '<style>'
+    '.block-container {padding:0rem;}'
+    '.grid-container {'
+    '  display: grid;'
+    '  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));'
+    '  gap: 2px;'
+    '}'
+    '.grid-item {'
+    '  border-radius: 6px;'
+    '  padding: 5px;'
+    '  text-align: center;'
+    '  font-size: 14px;'
+    '  font-weight: bold;'
+    '  color: black;'
+    '}'
+    '.verde { background-color: #d4edda; }'
+    '.amarillo { background-color: #fff3cd; }'
+    '.rojo { background-color: #f8d7da; }'
+    '.neutro { background-color: #e9ecef; }'
+    '</style>'
+    '<div class="grid-container">'
+)
 
 # Construir los cuadritos
 for _, row in df.iterrows():
     rem = row['Remision']
     sem = row['Semaforo']
+    
+    # Selección de color
     if sem == "🟢":
         color_class = "verde"
     elif sem == "🟡":
@@ -147,8 +146,12 @@ for _, row in df.iterrows():
         color_class = "rojo"
     else:
         color_class = "neutro"
-    html += f'<div class="grid-item {color_class}">{rem}<br>{sem}</div>'
+    
+    # Escapar remisión por si tiene caracteres problemáticos
+    rem_safe = rem.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+    
+    html += f'<div class="grid-item {color_class}">{rem_safe}<br>{sem}</div>'
 
-html += "</div>"
+html += '</div>'
 
 st.markdown(html, unsafe_allow_html=True)
