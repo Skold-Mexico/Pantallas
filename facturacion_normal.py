@@ -24,17 +24,21 @@ try:
     headers = data[0]
     data_recortada = data[1:]
     df = pd.DataFrame(data_recortada, columns=headers)
-
     df.columns = [c.strip() for c in df.columns]
 
+    # Filtrar remisiones válidas
     if 'Remision' in df.columns:
         df = df[df['Remision'].notna() & (df['Remision'].str.strip() != "")]
+        df['Remision'] = df['Remision'].astype(str).str.strip()
+        df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
 
+    # Fechas
     if 'Fecha de elab de la remision' in df.columns:
         df['Fecha de elab de la remision'] = pd.to_datetime(df['Fecha de elab de la remision'], errors='coerce')
     if 'Fecha de entrega de la remision' in df.columns:
         df['Fecha de entrega de la remision'] = pd.to_datetime(df['Fecha de entrega de la remision'], errors='coerce')
 
+    # Tiempo de surtimiento
     def parse_tiempo(x):
         try:
             h, m, s = map(int, str(x).split(":"))
@@ -45,6 +49,7 @@ try:
     if 'T. surtimiento' in df.columns:
         df['T. surtimiento'] = df['T. surtimiento'].apply(parse_tiempo)
 
+    # Estado remisión
     def estado_remision(row):
         fecha = str(row.get('Fecha de entrega de la remision', '')).strip()
         if not fecha:
@@ -59,6 +64,7 @@ try:
 
     df['EstadoRemision'] = df.apply(estado_remision, axis=1)
 
+    # Semáforo
     def semaforo(tiempo):
         if pd.isnull(tiempo):
             return "⚪"
@@ -71,6 +77,7 @@ try:
 
     df['Semaforo'] = df['T. surtimiento'].apply(semaforo) if 'T. surtimiento' in df.columns else "⚪"
 
+    # Estado logística
     def estado_liberacion(x):
         if isinstance(x, str):
             if x.strip().lower() == "liberado":
@@ -88,75 +95,67 @@ try:
     st.title("📦 Remisiones en Surtimiento")
 
     # --- KPIs ---
+    total = len(df)
+    surtimiento_count = (df['EstadoRemision'] == "Surtimiento").sum()
+    facturacion_count = (df['EstadoRemision'] == "Facturación").sum()
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📊 Total Remisiones", len(df))
-    col2.metric("🟢 En Verde", (df['Semaforo'] == "🟢").sum())
-    col3.metric("🟡 En Amarillo", (df['Semaforo'] == "🟡").sum())
-    col4.metric("🔴 En Rojo", (df['Semaforo'] == "🔴").sum())
+    col1.metric("📊 Total Remisiones", total)
+    col2.metric("📌 Surtimiento", surtimiento_count)
+    col3.metric("📌 Facturación", facturacion_count)
+    col4.metric("🟢 Total Verde", (df['Semaforo'] == "🟢").sum())
 
     st.markdown("---")
 
     # ==============================
-    # --- Limpiar columna Remision ---
-    # ==============================
-    if 'Remision' in df.columns:
-        df['Remision'] = df['Remision'].astype(str).str.strip()
-        df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
-
-    # ==============================
-    # --- Visualización usando columnas de Streamlit ---
+    # --- Visualización por estado ---
     # ==============================
     st.subheader("Estado de Remisiones")
-    
-    # Definir el número de columnas para la cuadrícula
-    num_columns = 8
-    columns = st.columns(num_columns)
-    
-    # Función para obtener el color según el semáforo
-    def get_color_class(semaforo):
-        if semaforo == "🟢":
-            return "background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 6px; padding: 10px; text-align: center;"
-        elif semaforo == "🟡":
-            return "background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 10px; text-align: center;"
-        elif semaforo == "🔴":
-            return "background-color: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 10px; text-align: center;"
-        else:
-            return "background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; text-align: center;"
-    
-    # Mostrar las remisiones en una cuadrícula
-    for i, (_, row) in enumerate(df.iterrows()):
-        rem = row['Remision']
-        sem = row['Semaforo']
-        
-        # Determinar en qué columna colocar este elemento
-        col_index = i % num_columns
-        
-        # Usar markdown con estilo en lugar de HTML crudo
-        with columns[col_index]:
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.markdown("### 📝 Facturación")
+        fact_df = df[df['EstadoRemision'] == "Facturación"]
+        for _, row in fact_df.iterrows():
+            color = (
+                "#d4edda" if row['Semaforo'] == "🟢" else
+                "#fff3cd" if row['Semaforo'] == "🟡" else
+                "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
+            )
             st.markdown(
-                f'<div style="{get_color_class(sem)}">'
-                f'<strong>{rem}</strong><br>{sem}'
-                f'</div>',
-                unsafe_allow_html=True
+                f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px;">'
+                f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
+                f'</div>', unsafe_allow_html=True
             )
 
-    # Añadir información adicional
+    with col_right:
+        st.markdown("### 🚚 Surtimiento")
+        surt_df = df[df['EstadoRemision'] == "Surtimiento"]
+        for _, row in surt_df.iterrows():
+            color = (
+                "#d4edda" if row['Semaforo'] == "🟢" else
+                "#fff3cd" if row['Semaforo'] == "🟡" else
+                "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
+            )
+            st.markdown(
+                f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px;">'
+                f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
+                f'</div>', unsafe_allow_html=True
+            )
+
+    # Leyenda
     st.markdown("---")
     st.subheader("Leyenda de Estados")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
+    lc1, lc2, lc3, lc4 = st.columns(4)
+    with lc1:
         st.markdown("🟢 **Verde**: Tiempo ≤ 2h 40m")
-    with col2:
+    with lc2:
         st.markdown("🟡 **Amarillo**: Tiempo ≤ 3h")
-    with col3:
+    with lc3:
         st.markdown("🔴 **Rojo**: Tiempo > 3h")
-    with col4:
+    with lc4:
         st.markdown("⚪ **Neutro**: Sin dato")
-
-    # También mostrar los datos en forma de tabla como alternativa
-    st.markdown("---")
-    st.subheader("Vista detallada")
-    st.dataframe(df[['Remision', 'Semaforo', 'T. surtimiento', 'EstadoRemision']].head(20))
 
 except Exception as e:
     st.error(f"Se produjo un error: {str(e)}")
