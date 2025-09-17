@@ -29,9 +29,7 @@ try:
         df['Remision'] = df['Remision'].astype(str).str.strip()
         df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
 
-    # -----------------------------
     # Parsear fechas mixtas
-    # -----------------------------
     def parse_fecha(fecha_str):
         for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
             try:
@@ -44,9 +42,7 @@ try:
         df['Fecha de entrega de la remision'] = df['Fecha de entrega de la remision'].astype(str).str.strip()
         df['Fecha de entrega de la remision'] = df['Fecha de entrega de la remision'].apply(parse_fecha)
 
-    # -----------------------------
     # Tiempo de surtimiento
-    # -----------------------------
     def parse_tiempo(x):
         try:
             h, m, s = map(int, str(x).split(":"))
@@ -57,16 +53,12 @@ try:
     if 'T. surtimiento' in df.columns:
         df['T. surtimiento'] = df['T. surtimiento'].apply(parse_tiempo)
 
-    # -----------------------------
-    # Estado remisión
-    # -----------------------------
+    # Estado remision
     df['EstadoRemision'] = df['Fecha de entrega de la remision'].apply(
         lambda x: "Facturación" if pd.notnull(x) else "Surtimiento"
     )
 
-    # -----------------------------
     # Semáforo
-    # -----------------------------
     def semaforo(tiempo):
         if pd.isnull(tiempo):
             return "⚪"
@@ -79,9 +71,7 @@ try:
 
     df['Semaforo'] = df['T. surtimiento'].apply(semaforo) if 'T. surtimiento' in df.columns else "⚪"
 
-    # -----------------------------
     # Estado logística
-    # -----------------------------
     def estado_liberacion(x):
         if isinstance(x, str):
             if x.strip().lower() == "liberado":
@@ -115,47 +105,28 @@ try:
     col6.metric("🔴 Rojo", rojo_count)
 
     st.markdown("---")
-
-    # ==============================
-    # --- Visualización por estado ---
-    # ==============================
     st.subheader("Estado de Remisiones")
-    col_left, col_right = st.columns(2)
 
-    with col_left:
-        st.markdown("### 📝 Facturación")
-        fact_df = df[df['EstadoRemision'] == "Facturación"]
-        for _, row in fact_df.iterrows():
+    # Mostrar todos los cuadritos en la misma columna
+    for _, row in df.iterrows():
+        if row['EstadoRemision'] == "Surtimiento":
+            color = "#007bff"  # azul fuerte
+        else:
             color = (
                 "#d4edda" if row['Semaforo'] == "🟢" else
                 "#fff3cd" if row['Semaforo'] == "🟡" else
                 "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
             )
-            st.markdown(
-                f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px;">'
-                f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
-                f'</div>', unsafe_allow_html=True
-            )
-
-    with col_right:
-        st.markdown("### 🚚 Surtimiento")
-        surt_df = df[df['EstadoRemision'] == "Surtimiento"]
-        for _, row in surt_df.iterrows():
-            color = (
-                "#d4edda" if row['Semaforo'] == "🟢" else
-                "#fff3cd" if row['Semaforo'] == "🟡" else
-                "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
-            )
-            st.markdown(
-                f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px;">'
-                f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
-                f'</div>', unsafe_allow_html=True
-            )
+        st.markdown(
+            f'<div style="background-color:{color}; border-radius:6px; padding:5px; margin-bottom:2px; color:black;">'
+            f'<strong>{row["Remision"]}</strong> {row["Semaforo"]}'
+            f'</div>', unsafe_allow_html=True
+        )
 
     # Leyenda
     st.markdown("---")
     st.subheader("Leyenda de Estados")
-    lc1, lc2, lc3, lc4 = st.columns(4)
+    lc1, lc2, lc3, lc4, lc5 = st.columns(5)
     with lc1:
         st.markdown("🟢 **Verde**: Tiempo ≤ 2h 40m")
     with lc2:
@@ -164,6 +135,8 @@ try:
         st.markdown("🔴 **Rojo**: Tiempo > 3h")
     with lc4:
         st.markdown("⚪ **Neutro**: Sin dato")
+    with lc5:
+        st.markdown("🔵 **Surtimiento**: Sin fecha de entrega")
 
 except Exception as e:
     st.error(f"Se produjo un error: {str(e)}")
