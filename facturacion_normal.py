@@ -86,7 +86,7 @@ try:
     # --- Dashboard ---
     # =============================
     st.set_page_config(page_title="Remisiones en Surtimiento", layout="wide")
-    st.title("📦 Remisiones en Surtimiento")
+    #st.title("📦 Remisiones en Surtimiento")
 
     # --- KPIs ---
     total = len(df)
@@ -111,7 +111,7 @@ try:
     # Mostrar los cuadritos en cuadrícula
     # -----------------------------
     # Número de cuadritos por fila
-    cuadros_por_fila = 20
+    cuadros_por_fila = 22
     fila = []
 
     for i, row in df.iterrows():
@@ -150,21 +150,6 @@ try:
                 )
             fila = []  # Reiniciar fila
 
-
-    # Leyenda
-    st.markdown("---")
-    st.subheader("Leyenda de Estados")
-    lc1, lc2, lc3, lc4, lc5 = st.columns(5)
-    with lc1:
-        st.markdown("🟢 **Verde**: Tiempo ≤ 2h 40m")
-    with lc2:
-        st.markdown("🟡 **Amarillo**: Tiempo ≤ 3h")
-    with lc3:
-        st.markdown("🔴 **Rojo**: Tiempo > 3h")
-    with lc4:
-        st.markdown("⚪ **Neutro**: Sin dato")
-    with lc5:
-        st.markdown("🔵 **Surtimiento**: Sin fecha de entrega")
 
 except Exception as e:
     st.error(f"Se produjo un error: {str(e)}")
