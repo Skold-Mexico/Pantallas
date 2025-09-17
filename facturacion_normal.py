@@ -124,19 +124,32 @@ try:
                 "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
             )
 
-        # Crear columna temporal para cada cuadro
+        # Agregar datos de la remisión
         fila.append((row['Remision'], row['Semaforo'], color))
 
-        # Cuando la fila llega a cuadros_por_fila o es el último elemento, se imprime
+        # Cuando se llena la fila o llega al último
         if len(fila) == cuadros_por_fila or i == df.index[-1]:
             cols = st.columns(len(fila))
             for c, (rem, sem, col_color) in zip(cols, fila):
                 c.markdown(
-                    f'<div style="background-color:{col_color}; border-radius:6px; padding:10px; text-align:center; margin-bottom:5px; color:black;">'
-                    f'<strong>{rem}</strong><br>{sem}</div>',
+                    f"""
+                    <div style="
+                        background-color:{col_color};
+                        border-radius:6px;
+                        padding:6px;
+                        text-align:center;
+                        margin:2px;
+                        color:black;
+                        font-size:12px;
+                        white-space:nowrap;
+                    ">
+                        <strong>{rem}</strong><br>{sem}
+                    </div>
+                    """,
                     unsafe_allow_html=True
                 )
             fila = []  # Reiniciar fila
+
 
     # Leyenda
     st.markdown("---")
