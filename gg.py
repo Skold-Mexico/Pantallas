@@ -1,17 +1,41 @@
-import json
-
-# Carga tu secrets.json
-with open("secrets.json", "r") as f:
-    data = json.load(f)
-
-# Convierte los saltos de línea de la clave privada
-if "private_key" in data:
-    data["private_key"] = data["private_key"].replace("\\n", "\n")  # en caso de que ya tenga \n
-    data["private_key"] = data["private_key"].replace("\n", "\\n")  # para Streamlit
-
-# Genera el diccionario para usar en st.secrets
-secrets_dict = {"google": data}
-
-# Opcional: imprime para copiar en Streamlit
-import pprint
-pprint.pprint(secrets_dict)
+[google]
+type = "service_account"
+project_id = "chatbot-464623"
+private_key_id = "c5137039e5141e67ef5f3478c47d30dd5604ef40"
+private_key = """
+-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCU8nTxaW8V0Usq
+GzJfOJSDXirr8pldFHjnQwMKYZIw4oP2cEr2vYJgilKlAGnepfoMOSgenavsWGRa
+IQgsAc2EujIgvuMrwnIKyW/wNs6Tphy2gWQNfRm+BqIu5sBGLcS1fmyEi8vxg5SE
+z0bTOQiZVPXMRSaxwk/uEOONouewpfNTflPlf7wMHbvyjEBp5J/JEv5WZzybnOYz
+cYkSlW9PnX244GXIaeianSQDIhHHW7cPSHx7VNsCnA7aAHsLrdnpuPYY+pgxAIuZ
+KaIH9aqiVoQUMBi5NCKuS8nX8jFKpIk7vZPY6LgVQTuPTCCsg+JOj9gO6L8XLT1o
+mkgUwZH5AgMBAAECggEAMMy/Q9knbB6GYeVHO6tt/Rx9M5Dobnamph5ugJg3LY0J
+b1SbOvwcG0U2jpj0Ft6KbjbLzjwad/T97Ammg8STcUkP42qnQ08RzjbxVeKfDAEA
+p0r9XO3/4SKLQJKZrGSSbmRdaY/j4d0aa+j9a3bkOlh7r9F4PAVN6tHdvCoDfvxg
+FKs/QYspj1BaasoyMWxVilPJRqOV88F6BUj56WW3oQW/L3a3eiE3OZldchYNQW+3
+qoL6Eh+L5LrEVgHgAnchPfPOqTNjha+8pTAR4ncsSHbP2pL6fCG4R/yihIPth/Nc
+vB+gy5VBBRAPYFPHmQg8iqVG0SEQRarPdnb0Xzd7gQKBgQDKGYwYOEZHIF4MZjo/
+N75cU6ci1NB6reAjyhNRV8p9d2fAv6xukfS0fbQhh1MBWiPgv1Nl/9p7xcz1Rcc8
+tW+zjvw8TPIKmYeBrEXOHkfuVMymD5BvCnkKYoXKXUekim1m3D1875vNz1z8ICnd
+C9geIF2ykIUwAx4oLLBrSWjjwwKBgQC8q+K8GLBbznG9VzvpmAhsAtqlZZWnU1Lq
+AlJmcATsbEVgxjMesKGibx7pKrGx6T+Mv2zUm/u7IgXuRGlvHqV/YPjbBmGtVyXW
+7wcIuR4br+8PyjejZefe88ZBFj/j+jIeX4swuJWinXAFoRNKV5yhPKwGUs05J/Tj
+PVzzzX6DkwKBgFcRDoPYqp412Y6p8+oMT9xixZyB5pcTlX6VriDbG4dWC8LEULsJ
+8kxX42SWcjIg7VgD1SAaS7wLCTOZri3/VHIc5Zns5FGgtvosh542+XI54jigd+7+
+qgrJSy5VZWoDoQIxW+QZLhxKe5q7GI38bkz8UKF/FYILtdBFAHQYGjIVAoGASFQM
+o9dDJK7L464hhbeG4wFlGKsM6AyFaLhjJmojOQ94uVTCHC3SiRbYXsLDRFUKy8ZG
+zmrN4jt00pbfZH33LBHc1PppT65tDyyrIaj15d9YYlE/ayCR92K0yhbhf2BW/lXa
+Yl8g3ipE26OYZZOYtCcyO2paymKK+uJ3U++fZIkCgYEAlqaFgHi2bonrIWmyHGtL
+IvzxMHMiGYsiFNOxeW4vip6wdQEf0so1JGavUEWwI4uG4DJ1SK3iXIpBuKyPI9T1
+AMsck/GtuHYsReWK1T/pNo65WIx2wSQqhwm03yxfNUN6ZAv1HnTBlotnn49qfeak
+0tpVfNbV6kO8gm7OM1b7Foo=
+-----END PRIVATE KEY-----
+"""
+client_email = "stramlit@chatbot-464623.iam.gserviceaccount.com"
+client_id = "107190069495180075354"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/stramlit%40chatbot-464623.iam.gserviceaccount.com"
+universe_domain = "googleapis.com"

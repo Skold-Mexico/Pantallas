@@ -22,6 +22,7 @@ data = worksheet.get_all_values()
 headers = data[0]
 data_recortada = data[1:]
 df = pd.DataFrame(data_recortada, columns=headers)
+
 df.columns = [c.strip() for c in df.columns]
 
 if 'Remision' in df.columns:
@@ -96,6 +97,20 @@ st.markdown("---")
 # =============================
 # --- HTML/CSS para cuadritos ---
 # =============================
+import re
+
+# ==============================
+# --- Limpiar columna Remision ---
+# ==============================
+if 'Remision' in df.columns:
+    # Convertir a string, eliminar espacios al inicio/final
+    df['Remision'] = df['Remision'].astype(str).str.strip()
+    # Eliminar caracteres invisibles/no imprimibles
+    df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
+
+# ==============================
+# --- HTML/CSS para cuadritos ---
+# ==============================
 html = """
 <style>
 .block-container {padding:0rem;}
