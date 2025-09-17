@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-import plotly.express as px
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 # =============================
-# --- Autenticación Google Sheets ---
+# --- Google Sheets ---
 # =============================
 credenciales = Credentials.from_service_account_file(
     "secrets.json",
@@ -16,78 +15,46 @@ gc = gspread.authorize(credenciales)
 sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
 worksheet = sh.worksheet("Surtimiento")
 
-# =============================
-# --- Cargar datos ---
-# =============================
 data = worksheet.get_all_values()
-
-# =============================
-# --- Usar encabezados de la hoja ---
-# =============================
-headers = data[0]  # primera fila como headers
-data_recortada = data[1:]  # resto de filas
+headers = data[0]
+data_recortada = data[1:]
 df = pd.DataFrame(data_recortada, columns=headers)
-
-# =============================
-# --- Limpiar nombres de columnas ---
-# =============================
 df.columns = [c.strip() for c in df.columns]
-# =============================
-# --- Filtrar filas sin Remision ---
-# =============================
+
 if 'Remision' in df.columns:
     df = df[df['Remision'].notna() & (df['Remision'].str.strip() != "")]
 
-# =============================
-# --- Conversión de columnas ---
-# =============================
 if 'Fecha de elab de la remision' in df.columns:
     df['Fecha de elab de la remision'] = pd.to_datetime(df['Fecha de elab de la remision'], errors='coerce')
 if 'Fecha de entrega de la remision' in df.columns:
     df['Fecha de entrega de la remision'] = pd.to_datetime(df['Fecha de entrega de la remision'], errors='coerce')
 
-# Parsear T. surtimiento como timedelta
 def parse_tiempo(x):
     try:
-        # Separar horas, minutos y segundos
         h, m, s = map(int, str(x).split(":"))
         return timedelta(hours=h, minutes=m, seconds=s)
     except:
         return pd.NaT
 
-
 if 'T. surtimiento' in df.columns:
     df['T. surtimiento'] = df['T. surtimiento'].apply(parse_tiempo)
 
-# =============================
-# --- Clasificación facturación vs surtimiento ---
-# =============================
-from datetime import datetime
-
 def estado_remision(row):
-    fecha = str(row.get('Fecha de entrega de la remision', '')).strip()
-    if not fecha:  # vacío
+    fecha = row.get('Fecha de entrega de la remision')
+    if pd.isna(fecha) or fecha == "":
         return "Surtimiento"
-    
-    # Intentar parsear fecha con formatos válidos
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
-        try:
-            datetime.strptime(fecha, fmt)
+    try:
+        # Parse flexible
+        fecha_dt = pd.to_datetime(fecha, dayfirst=True, errors='coerce')
+        if pd.notna(fecha_dt):
             return "Facturación"
-        except ValueError:
-            continue
-    
-    # Si no coincide con los formatos, sigue en Surtimiento
+    except:
+        pass
     return "Surtimiento"
-
-
 
 
 df['EstadoRemision'] = df.apply(estado_remision, axis=1)
 
-# =============================
-# --- Semáforo ---
-# =============================
 def semaforo(tiempo):
     if pd.isnull(tiempo):
         return "⚪"
@@ -98,14 +65,8 @@ def semaforo(tiempo):
     else:
         return "🔴"
 
-if 'T. surtimiento' in df.columns:
-    df['Semaforo'] = df['T. surtimiento'].apply(semaforo)
-else:
-    df['Semaforo'] = "⚪"
+df['Semaforo'] = df['T. surtimiento'].apply(semaforo) if 'T. surtimiento' in df.columns else "⚪"
 
-# =============================
-# --- Estado de Liberación ---
-# =============================
 def estado_liberacion(x):
     if isinstance(x, str):
         if x.strip().lower() == "liberado":
@@ -114,113 +75,87 @@ def estado_liberacion(x):
             return "Detenido"
     return "Pendiente"
 
-if 'Liberacion' in df.columns:
-    df['EstadoLogistica'] = df['Liberacion'].apply(estado_liberacion)
-else:
-    df['EstadoLogistica'] = "Pendiente"
+df['EstadoLogistica'] = df['Liberacion'].apply(estado_liberacion) if 'Liberacion' in df.columns else "Pendiente"
 
 # =============================
 # --- Dashboard ---
 # =============================
-st.set_page_config(page_title="Remisiones en surtimiento", layout="wide")
-st.title("📦 Remisiones en surtimiento")
+st.set_page_config(page_title="Remisiones en Surtimiento", layout="wide")
+st.title(" ")
 
-# --- Métricas principales ---
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("📊 Total Remisiones", len(df))
-col2.metric("🟢 En Verde", (df['Semaforo'] == "🟢").sum())
-col3.metric("🟡 En Amarillo", (df['Semaforo'] == "🟡").sum())
-col4.metric("🔴 En Rojo", (df['Semaforo'] == "🔴").sum())
+# --- KPIs Generales ---
+total_rem = len(df)
+total_verde = (df['Semaforo'] == "🟢").sum()
+total_amarillo = (df['Semaforo'] == "🟡").sum()
+total_rojo = (df['Semaforo'] == "🔴").sum()
 
-# --- Métricas extra ---
-col5, col6, col7 = st.columns(3)
-col5.metric("📝 En Surtimiento", (df['EstadoRemision'] == "Surtimiento").sum())
-col6.metric("📑 En Facturación", (df['EstadoRemision'] == "Facturación").sum())
-col7.metric("⚙️ Liberadas", (df['EstadoLogistica'] == "Liberado").sum())
+total_surt = (df['EstadoRemision'] == "Surtimiento").sum()
+total_fact = (df['EstadoRemision'] == "Facturación").sum()
 
-col8, col9 = st.columns(2)
-col8.metric("⛔ Detenidas", (df['EstadoLogistica'] == "Detenido").sum())
-col9.metric("⏳ Pendientes", (df['EstadoLogistica'] == "Pendiente").sum())
-
-st.markdown("---")
-
-# =============================
-# --- Tablas separadas ---
-# =============================
-def color_filas(row):
-    if row["Semaforo"] == "🟢":
-        return ["background-color: #d4edda"] * len(row)
-    elif row["Semaforo"] == "🟡":
-        return ["background-color: #fff3cd"] * len(row)
-    elif row["Semaforo"] == "🔴":
-        return ["background-color: #f8d7da"] * len(row)
-    else:
-        return [""] * len(row)
-
-st.subheader("📝 Remisiones en Surtimiento")
-cols_surt = ['Remision', 'Cliente', 'Nombre', 'Pedido', 'Fecha de elab de la remision',
-             'T. surtimiento', 'Hora de la entrega de la remision', 'Fecha Surtido', 'Hora Surtido',
-             'Almacenista', 'Tipo Prod (de la remision)', 'Comentarios', 'Liberacion', 'Semaforo', 'EstadoLogistica']
-cols_surt = [c for c in cols_surt if c in df.columns]
-df_surt = df[df['EstadoRemision'] == "Surtimiento"]
-st.dataframe(df_surt[cols_surt].style.apply(color_filas, axis=1), use_container_width=True)
-
-st.subheader("📑 Remisiones en Facturación")
-cols_fact = ['Remision', 'Cliente', 'Nombre', 'Pedido', 'Fecha de elab de la remision',
-             'Fecha de entrega de la remision', 'Hora de la entrega de la remision', 'T. surtimiento',
-             'Fecha Surtido', 'Hora Surtido', 'Almacenista', 'Tipo Prod (de la remision)', 'Comentarios', 'Liberacion',
-             'Semaforo', 'EstadoLogistica']
-cols_fact = [c for c in cols_fact if c in df.columns]
-df_fact = df[df['EstadoRemision'] == "Facturación"]
-st.dataframe(df_fact[cols_fact].style.apply(color_filas, axis=1), use_container_width=True)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+col1.metric("📊 Total Remisiones", total_rem)
+col2.metric("🟢 Total Verde", total_verde)
+col3.metric("🟡 Total Amarillo", total_amarillo)
+col4.metric("🔴 Total Rojo", total_rojo)
+col5.metric("🟠 En Surtimiento", total_surt)
+col6.metric("🔵 En Facturación", total_fact)
 
 st.markdown("---")
 
 # =============================
-# --- Gráficos ---
+# --- Función para generar grid HTML ---
 # =============================
-st.subheader("📊 Distribución por Semáforo")
-semaforo_count = df['Semaforo'].value_counts().reset_index()
-semaforo_count.columns = ["Semaforo", "Cantidad"]
-
-fig1 = px.bar(
-    semaforo_count,
-    x="Semaforo", y="Cantidad", text="Cantidad", color="Semaforo",
-    color_discrete_map={"🟢": "green", "🟡": "yellow", "🔴": "red", "⚪": "lightgray"}
-)
-fig1.update_traces(textposition="outside")
-st.plotly_chart(fig1, use_container_width=True)
-
-colg1, colg2 = st.columns(2)
-
-with colg1:
-    st.subheader("📊 Estado de Remisiones")
-    estado_count = df['EstadoRemision'].value_counts().reset_index()
-    estado_count.columns = ["Estado", "Cantidad"]
-    fig2 = px.pie(estado_count, names="Estado", values="Cantidad", hole=0.4, color="Estado",
-                  color_discrete_map={"Surtimiento": "orange", "Facturación": "blue"})
-    st.plotly_chart(fig2, use_container_width=True)
-
-with colg2:
-    st.subheader("📦 Estado Logístico")
-    log_count = df['EstadoLogistica'].value_counts().reset_index()
-    log_count.columns = ["Estado", "Cantidad"]
-    fig3 = px.pie(log_count, names="Estado", values="Cantidad", hole=0.4, color="Estado",
-                  color_discrete_map={"Liberado": "green", "Detenido": "red", "Pendiente": "gray"})
-    st.plotly_chart(fig3, use_container_width=True)
-
-st.markdown("---")
+def generar_grid(df_sub):
+    html = """
+    <style>
+    .block-container {padding:0rem;}
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+      gap: 2px;
+      margin-top: 0;
+    }
+    .grid-item {
+      border-radius: 6px;
+      padding: 5px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: black;
+    }
+    .verde { background-color: #d4edda; }
+    .amarillo { background-color: #fff3cd; }
+    .rojo { background-color: #f8d7da; }
+    .neutro { background-color: #e9ecef; }
+    </style>
+    <div class="grid-container">
+    """
+    for _, row in df_sub.iterrows():
+        rem = row['Remision']
+        sem = row['Semaforo']
+        if sem == "🟢":
+            color_class = "verde"
+        elif sem == "🟡":
+            color_class = "amarillo"
+        elif sem == "🔴":
+            color_class = "rojo"
+        else:
+            color_class = "neutro"
+        html += f'<div class="grid-item {color_class}">{rem}<br>{sem}</div>'
+    html += "</div>"
+    return html
 
 # =============================
-# --- Filtro por Cliente ---
+# --- Dividir pantalla en izquierda/derecha ---
 # =============================
-cliente_col = 'Nombre' if 'Nombre' in df.columns else df.columns[1]
-st.subheader("🔍 Filtrar Remisiones por Cliente")
-clientes_unicos = df[cliente_col].dropna().unique()
-filtro_cliente = st.selectbox("Selecciona un cliente:", [""] + list(clientes_unicos))
+col_surt, col_fact = st.columns(2)
 
-if filtro_cliente:
-    df_filtrado = df[df[cliente_col] == filtro_cliente]
-    cols_filter = ['Remision', 'Nombre', 'Pedido', 'EstadoRemision', 'EstadoLogistica', 'T. surtimiento', 'Semaforo']
-    cols_filter = [c for c in cols_filter if c in df.columns]
-    st.dataframe(df_filtrado[cols_filter], use_container_width=True)
+with col_surt:
+    st.subheader("🟠 Surtimiento")
+    df_surt = df[df['EstadoRemision'] == "Surtimiento"]
+    st.markdown(generar_grid(df_surt), unsafe_allow_html=True)
+
+with col_fact:
+    st.subheader("🔵 Facturación")
+    df_fact = df[df['EstadoRemision'] == "Facturación"]
+    st.markdown(generar_grid(df_fact), unsafe_allow_html=True)
