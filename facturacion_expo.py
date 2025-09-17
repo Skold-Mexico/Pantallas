@@ -24,8 +24,10 @@ st.markdown("<div style='margin-top:-0.5rem;'></div>", unsafe_allow_html=True)
 # ==============================
 # --- Conexión Google Sheets ---
 # ==============================
-credenciales = Credentials.from_service_account_file(
-    "secrets.json",  
+google_creds = st.secrets["google"]
+
+credenciales = Credentials.from_service_account_info(
+    google_creds,
     scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
 )
 gc = gspread.authorize(credenciales)
