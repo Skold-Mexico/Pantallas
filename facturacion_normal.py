@@ -182,3 +182,4 @@ try:
 except Exception as e:
     st.error(f"Se produjo un error: {str(e)}")
     st.info("Por favor, verifica la conexión con Google Sheets y los permisos de acceso.")
+    
