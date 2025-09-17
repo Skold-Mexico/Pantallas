@@ -5,9 +5,6 @@ from google.oauth2.service_account import Credentials
 from datetime import timedelta, datetime
 import re
 
-# =============================
-# --- Google Sheets ---
-# =============================
 try:
     google_creds = st.secrets["google"]
 
@@ -26,19 +23,30 @@ try:
     df = pd.DataFrame(data_recortada, columns=headers)
     df.columns = [c.strip() for c in df.columns]
 
-    # Filtrar remisiones válidas
+    # Limpiar columna Remision
     if 'Remision' in df.columns:
         df = df[df['Remision'].notna() & (df['Remision'].str.strip() != "")]
         df['Remision'] = df['Remision'].astype(str).str.strip()
         df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
 
-    # Fechas
-    if 'Fecha de elab de la remision' in df.columns:
-        df['Fecha de elab de la remision'] = pd.to_datetime(df['Fecha de elab de la remision'], errors='coerce')
-    if 'Fecha de entrega de la remision' in df.columns:
-        df['Fecha de entrega de la remision'] = pd.to_datetime(df['Fecha de entrega de la remision'], errors='coerce')
+    # -----------------------------
+    # Parsear fechas mixtas
+    # -----------------------------
+    def parse_fecha(fecha_str):
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(fecha_str, fmt)
+            except:
+                continue
+        return pd.NaT
 
+    if 'Fecha de entrega de la remision' in df.columns:
+        df['Fecha de entrega de la remision'] = df['Fecha de entrega de la remision'].astype(str).str.strip()
+        df['Fecha de entrega de la remision'] = df['Fecha de entrega de la remision'].apply(parse_fecha)
+
+    # -----------------------------
     # Tiempo de surtimiento
+    # -----------------------------
     def parse_tiempo(x):
         try:
             h, m, s = map(int, str(x).split(":"))
@@ -49,22 +57,16 @@ try:
     if 'T. surtimiento' in df.columns:
         df['T. surtimiento'] = df['T. surtimiento'].apply(parse_tiempo)
 
+    # -----------------------------
     # Estado remisión
-    def estado_remision(row):
-        fecha = str(row.get('Fecha de entrega de la remision', '')).strip()
-        if not fecha:
-            return "Surtimiento"
-        for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
-            try:
-                datetime.strptime(fecha, fmt)
-                return "Facturación"
-            except ValueError:
-                continue
-        return "Surtimiento"
+    # -----------------------------
+    df['EstadoRemision'] = df['Fecha de entrega de la remision'].apply(
+        lambda x: "Facturación" if pd.notnull(x) else "Surtimiento"
+    )
 
-    df['EstadoRemision'] = df.apply(estado_remision, axis=1)
-
+    # -----------------------------
     # Semáforo
+    # -----------------------------
     def semaforo(tiempo):
         if pd.isnull(tiempo):
             return "⚪"
@@ -77,7 +79,9 @@ try:
 
     df['Semaforo'] = df['T. surtimiento'].apply(semaforo) if 'T. surtimiento' in df.columns else "⚪"
 
+    # -----------------------------
     # Estado logística
+    # -----------------------------
     def estado_liberacion(x):
         if isinstance(x, str):
             if x.strip().lower() == "liberado":
@@ -98,12 +102,17 @@ try:
     total = len(df)
     surtimiento_count = (df['EstadoRemision'] == "Surtimiento").sum()
     facturacion_count = (df['EstadoRemision'] == "Facturación").sum()
+    verde_count = (df['Semaforo'] == "🟢").sum()
+    amarillo_count = (df['Semaforo'] == "🟡").sum()
+    rojo_count = (df['Semaforo'] == "🔴").sum()
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.metric("📊 Total Remisiones", total)
     col2.metric("📌 Surtimiento", surtimiento_count)
     col3.metric("📌 Facturación", facturacion_count)
-    col4.metric("🟢 Total Verde", (df['Semaforo'] == "🟢").sum())
+    col4.metric("🟢 Verde", verde_count)
+    col5.metric("🟡 Amarillo", amarillo_count)
+    col6.metric("🔴 Rojo", rojo_count)
 
     st.markdown("---")
 
@@ -111,7 +120,6 @@ try:
     # --- Visualización por estado ---
     # ==============================
     st.subheader("Estado de Remisiones")
-
     col_left, col_right = st.columns(2)
 
     with col_left:
