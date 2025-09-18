@@ -44,16 +44,20 @@ if 'T. surtimiento' in df.columns:
 
 def estado_remision(row):
     fecha = row.get('Fecha de entrega de la remision')
-    if pd.isna(fecha) or fecha == "":
+    
+    # Si está vacío o NaN → Surtimiento
+    if pd.isna(fecha) or str(fecha).strip() == "":
         return "Surtimiento"
-    try:
-        # Parse flexible
-        fecha_dt = pd.to_datetime(fecha, dayfirst=True, errors='coerce')
-        if pd.notna(fecha_dt):
-            return "Facturación"
-    except:
-        pass
-    return "Surtimiento"
+    
+    # Intentar parsear como fecha
+    fecha_dt = pd.to_datetime(fecha, dayfirst=True, errors='coerce')
+    
+    if pd.notna(fecha_dt):
+        return "Facturación"
+    
+    # Si no fue fecha válida → Facturación
+    return "Facturación"
+
 
 
 df['EstadoRemision'] = df.apply(estado_remision, axis=1)
