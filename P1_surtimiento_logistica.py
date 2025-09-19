@@ -84,7 +84,7 @@ try:
     # --- Dashboard ---
     # =============================
     st.set_page_config(page_title="Logística", layout="wide")
-    st.subheader("🚚 Estado Logística")
+    st.subheader("Surtimiento y logística")
 
     # --- KPIs ---
     total = len(df)
