@@ -30,6 +30,21 @@ try:
         df['Remision'] = df['Remision'].astype(str).str.strip()
         df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
 
+    # --- Filtrar por remisiones SIN fecha válida ---
+    if 'Fecha Entrega' in df.columns:
+        def es_fecha_valida(valor):
+            if not valor or valor.strip() == "":
+                return False
+            try:
+                datetime.strptime(valor.strip(), "%d/%m/%Y")
+                return True
+            except ValueError:
+                return False
+
+        # Nos quedamos solo con las que NO son fecha válida
+        df = df[~df['Fecha Entrega'].apply(es_fecha_valida)]
+
+
     # Parsear columna Demora
     if 'Demora' in df.columns:
         df['Demora'] = pd.to_numeric(df['Demora'], errors='coerce')
