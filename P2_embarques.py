@@ -84,7 +84,7 @@ try:
     # =============================
     # --- Dashboard ---
     # =============================
-    st.set_page_config(page_title="Logística", layout="wide")
+    st.set_page_config(page_title="Embarques", layout="wide")
     st.subheader("Embarques")
 
     # --- KPIs ---
