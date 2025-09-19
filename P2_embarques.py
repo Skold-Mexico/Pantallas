@@ -36,14 +36,29 @@ try:
         def es_fecha_valida(valor):
             if not valor or valor.strip() == "":
                 return False
+            valor = valor.strip()
+
+            # Caso 1: fecha simple dd/mm/yyyy
             try:
-                datetime.strptime(valor.strip(), "%d/%m/%Y")
+                datetime.strptime(valor, "%d/%m/%Y")
                 return True
             except ValueError:
-                return False
+                pass
+
+            # Caso 2: rango de fechas "dd/mm/yyyy - dd/mm/yyyy"
+            try:
+                partes = [p.strip() for p in valor.split("-")]
+                if len(partes) == 2:
+                    datetime.strptime(partes[0], "%d/%m/%Y")
+                    datetime.strptime(partes[1], "%d/%m/%Y")
+                    return True
+            except ValueError:
+                pass
+
+            return False
 
         df = df[
-            ~df['Fecha Entrega'].apply(es_fecha_valida) & 
+            ~df['Fecha Entrega'].apply(es_fecha_valida) &
             (df['T. Servicio'].notna()) &
             (df['T. Servicio'].str.strip() != "") &
             (df['T. Servicio'].str.upper() != "N/A")
