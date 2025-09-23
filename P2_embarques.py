@@ -4,9 +4,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import re
+import json
 
 try:
-    google_creds = st.secrets["google"]
+   google_creds = st.secrets["google"]  # Solo funcionará en Streamlit Cloud
+except Exception:
+    # Local: cargar secrets.json
+    with open("secrets.json", "r", encoding="utf-8") as f:
+        google_creds = json.load(f)
 
     credenciales = Credentials.from_service_account_info(
         google_creds,

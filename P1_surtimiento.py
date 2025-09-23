@@ -4,9 +4,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import re
+import json
 
 try:
-    google_creds = st.secrets["google"]
+    google_creds = st.secrets["google"]  # Solo funcionará en Streamlit Cloud
+except Exception:
+    # Local: cargar secrets.json
+    with open("secrets.json", "r", encoding="utf-8") as f:
+        google_creds = json.load(f)
 
     credenciales = Credentials.from_service_account_info(
         google_creds,
@@ -21,8 +26,7 @@ try:
     data = worksheet.get_all_values()
     headers = data[0]
     data_recortada = data[1:]
-    df = pd.DataFrame(data_recortada, columns=headers)
-    df.columns = [c.strip() for c in df.columns]
+    df = pd.DataFrame(data_recortada, columns=[c.strip() for c in headers])
 
     # Limpiar columna Remision
     if 'Remision' in df.columns:
@@ -30,20 +34,17 @@ try:
         df['Remision'] = df['Remision'].astype(str).str.strip()
         df['Remision'] = df['Remision'].apply(lambda x: re.sub(r'[^\x20-\x7E]+', '', x))
 
+    # Función para validar fechas
     if 'Factura' in df.columns and 'Fecha fact' in df.columns:
         def es_fecha_valida(valor):
             if not valor or str(valor).strip() == "":
                 return False
             valor = str(valor).strip()
-
-            # Caso 1: fecha simple dd/mm/yyyy
             try:
                 datetime.strptime(valor, "%d/%m/%Y")
                 return True
             except ValueError:
                 pass
-
-            # Caso 2: rango de fechas "dd/mm/yyyy - dd/mm/yyyy"
             try:
                 partes = [p.strip() for p in valor.split("-")]
                 if len(partes) == 2:
@@ -52,16 +53,21 @@ try:
                     return True
             except ValueError:
                 pass
-
             return False
 
-        df = df[
-            (df['Factura'].isna()) | 
-            (df['Factura'].str.strip() == "") | 
-            (df['Factura'].str.upper() == "N/A")
-        ]
+        # -----------------------------
+        # FILTRO: quedarse solo con filas sin factura, sin fecha de factura,
+        # sin fecha de entrega y sin fecha de SURTIMIENTO
+        # -----------------------------
+        condiciones = ((df['Factura'].isna()) | (df['Factura'].str.strip() == "") | (df['Factura'].str.upper() == "N/A")) & \
+                      (~df['Fecha fact'].apply(es_fecha_valida))
 
-        df = df[~df['Fecha fact'].apply(es_fecha_valida)]
+        if 'Fecha entrega' in df.columns:
+            condiciones &= (df['Fecha entrega'].isna() | (df['Fecha entrega'].str.strip() == ""))
+        if 'Fecha de SURTIMIENTO' in df.columns:
+            condiciones &= (~df['Fecha de SURTIMIENTO'].apply(es_fecha_valida))
+
+        df = df[condiciones]
 
     # Parsear columna Demora
     if 'Demora' in df.columns:
@@ -83,8 +89,8 @@ try:
     # =============================
     # --- Dashboard ---
     # =============================
-    st.set_page_config(page_title="Logística", layout="wide")
-    st.subheader("Surtimiento y logística")
+    st.set_page_config(page_title="Surtimiento", layout="wide")
+    st.subheader("Surtimiento")
 
     # --- KPIs ---
     total = len(df)

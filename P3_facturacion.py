@@ -4,27 +4,29 @@ from datetime import timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_autorefresh import st_autorefresh
+import json
 
 # ==============================
 # --- Autorefresh cada minuto ---
 # ==============================
-st_autorefresh(interval=60*1000, limit=None, key="refresh")
+st_autorefresh(interval=5*60*1000, limit=None, key="refresh")  # 5 minutos
 
 # ==============================
 # --- Configuración página ---
 # ==============================
 st.set_page_config(page_title="Pantalla Embarques", layout="wide")
-
-# ==============================
-# --- Opcional: reducir margen entre KPIs y grid ---
-# ==============================
 st.markdown("<div style='margin-top:-0.5rem;'></div>", unsafe_allow_html=True)
-
 
 # ==============================
 # --- Conexión Google Sheets ---
 # ==============================
-google_creds = st.secrets["google"]
+try:
+    # Cloud
+    google_creds = st.secrets["google"]
+except Exception:
+    # Local
+    with open("secrets.json", "r", encoding="utf-8") as f:
+        google_creds = json.load(f)
 
 credenciales = Credentials.from_service_account_info(
     google_creds,
@@ -37,27 +39,27 @@ sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
 ws_log = sh.worksheet("Logistica")
 data_log = ws_log.get_all_records()
 df_log = pd.DataFrame(data_log)
-
+print("Columnas df_log:", df_log.columns.tolist())
 # --- Cargar hoja Ped Pendientes ---
 ws_ped = sh.worksheet("Ped Pendientes")
 data_ped = ws_ped.get_all_values()
 data_ped = [row[:6] for row in data_ped]
 headers = data_ped[0]
 df_ped = pd.DataFrame(data_ped[1:], columns=headers)
-
+print("Columnas df_ped:", df_ped.columns.tolist())
 # ==============================
 # --- Limpieza ---
 # ==============================
-df_log['Pedido'] = df_log['Pedido'].astype(str).str.strip()
-df_ped['Pedido'] = df_ped['Pedido'].astype(str).str.strip()
+df_log['no. pedido'] = df_log['no. pedido'].astype(str).str.strip()
+df_ped['no. pedido'] = df_ped['no. pedido'].astype(str).str.strip()
 df_ped['Estatus operativo'] = df_ped['Estatus operativo'].astype(str).str.strip()
 
 estatus_validos = ["FACTURACION/FISICO EMBARQUES", "EMBARQUES"]
 df_ped_filtrado = df_ped[df_ped['Estatus operativo'].isin(estatus_validos)]
 
 df_filtrado = df_log.merge(
-    df_ped_filtrado[['Pedido', 'Estatus operativo']],
-    on="Pedido",
+    df_ped_filtrado[['no. pedido', 'Estatus operativo']],
+    on="no. pedido",
     how="inner"
 )
 df_filtrado = df_filtrado[df_filtrado['Remision'].notna() & (df_filtrado['Remision'] != "")]
@@ -66,8 +68,8 @@ df_filtrado = df_filtrado[df_filtrado['Remision'].notna() & (df_filtrado['Remisi
 # --- Fechas y horas ---
 # ==============================
 df_filtrado['Fecha fact'] = pd.to_datetime(df_filtrado['Fecha fact'], errors='coerce')
-df_filtrado['Hora factura'] = pd.to_timedelta(df_filtrado['Hora factura'].astype(str), errors="coerce")
-df_filtrado['FechaHoraFact'] = df_filtrado['Fecha fact'] + df_filtrado['Hora factura'].fillna(pd.Timedelta(0))
+df_filtrado['Hora facturacion'] = pd.to_timedelta(df_filtrado['Hora facturacion'].astype(str), errors="coerce")
+df_filtrado['FechaHoraFact'] = df_filtrado['Fecha fact'] + df_filtrado['Hora facturacion'].fillna(pd.Timedelta(0))
 
 df_filtrado['Fecha de SURTIMIENTO'] = pd.to_datetime(df_filtrado['Fecha de SURTIMIENTO'], errors='coerce', dayfirst=True)
 df_filtrado['FechaHoraGuia'] = df_filtrado['Fecha de SURTIMIENTO']
@@ -101,6 +103,7 @@ col3.metric("🟡 En Amarillo", (df_filtrado['Semaforo'] == "🟡").sum())
 col4.metric("🔴 En Rojo", (df_filtrado['Semaforo'] == "🔴").sum())
 
 st.markdown("<div style='margin-top:-50px'></div>", unsafe_allow_html=True)
+
 # ==============================
 # --- Tablero compacto tipo grid ---
 # ==============================
@@ -108,38 +111,15 @@ df_tablero = df_filtrado[['Remision', 'Semaforo']].dropna()
 
 html = """
 <style>
-/* Quitar padding general de la página */
-.block-container {
-    padding-top: 0rem;
-    padding-bottom: 0rem;
-    padding-left: 0rem;
-    padding-right: 0rem;
-}
-
-/* Reducir espacio de columnas de KPIs */
-.css-1vq4p4l {  /* Clase de columnas internas de Streamlit */
-    margin-bottom: 0rem;
-    padding-bottom: 0rem;
-}
-
-/* Reducir tamaño y espacio de textos en KPIs */
-.css-1v3fvcr {
-    font-size: 0rem;
-    line-height: 1.1;
-}
-
-/* Grid compacto */
-.grid-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
-  gap: 1px;  /* Gap mínimo entre cuadritos */
-  margin-top: 0;  /* Quitar margen arriba */
-}
+.block-container { padding:0; }
+.css-1vq4p4l { margin-bottom:0; padding-bottom:0; }
+.css-1v3fvcr { font-size:0rem; line-height:1.1; }
 
 .grid-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(45px, 0.5fr));
   gap: 1px;
+  margin-top: 0;
 }
 .grid-item {
   border-radius: 8px;
@@ -154,7 +134,6 @@ html = """
 .rojo { background-color: #f8d7da; }
 .neutro { background-color: #e9ecef; }
 </style>
-
 <div class="grid-container">
 """
 
