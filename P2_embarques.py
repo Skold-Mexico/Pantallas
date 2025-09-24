@@ -78,25 +78,33 @@ if 'Fecha Entrega' in df.columns and 'T. Servicio' in df.columns:
     ]
 
 # ==============================
-# --- Semáforo Demora ---
+# --- Semáforo Tiempo de embarques ---
 # ==============================
-if 'Demora' in df.columns:
-    df['Demora'] = pd.to_numeric(df['Demora'], errors='coerce')
+if 'Tiempo de embarques' in df.columns:
+    # Convertir a timedelta
+    df['Tiempo de embarques'] = pd.to_timedelta(df['Tiempo de embarques'], errors='coerce')
 
-def semaforo_demora(x):
+def semaforo_embarques(x):
     if pd.isnull(x):
         return "⚪"
-    if x < 1:
+    if x <= pd.Timedelta(hours=23):
         return "🟢"
-    elif x == 1:
+    elif x <= pd.Timedelta(hours=24):
         return "🟡"
     else:
         return "🔴"
 
-df['Semaforo'] = df['Demora'].apply(semaforo_demora) if 'Demora' in df.columns else "⚪"
+df['Semaforo'] = df['Tiempo de embarques'].apply(semaforo_embarques) if 'Tiempo de embarques' in df.columns else "⚪"
 
 # ==============================
-# --- KPIs ---
+# --- Ordenar por semáforo (rojo, amarillo, verde) ---
+# ==============================
+orden = {"🔴": 0, "🟡": 1, "🟢": 2, "⚪": 3}
+df['orden_semaforo'] = df['Semaforo'].map(orden)
+df = df.sort_values(by="orden_semaforo").reset_index(drop=True)
+
+# ==============================
+# --- KPIs actualizados ---
 # ==============================
 total = len(df)
 verde_count = (df['Semaforo'] == "🟢").sum()
@@ -105,9 +113,10 @@ rojo_count = (df['Semaforo'] == "🔴").sum()
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("📊 Total", total)
-col2.metric("🟢 Verde (<1)", verde_count)
-col3.metric("🟡 Amarillo (=1)", amarillo_count)
-col4.metric("🔴 Rojo (>1)", rojo_count)
+col2.metric("🟢 Verde (≤23h)", verde_count)
+col3.metric("🟡 Amarillo (23–24h)", amarillo_count)
+col4.metric("🔴 Rojo (>24h)", rojo_count)
+
 
 st.markdown("---")
 
