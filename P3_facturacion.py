@@ -30,32 +30,47 @@ sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
 # ==============================
 # --- Cargar hojas ---
 # ==============================
-ws_log = sh.worksheet("Logistica")
-data_log = ws_log.get_all_records()
-df_log = pd.DataFrame(data_log)
+def cargar_hoja(nombre_hoja):
+    ws = sh.worksheet(nombre_hoja)
+    data = ws.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    # Normalizar nombres de columna: minúsculas, sin espacios, sin acentos
+    df.columns = [c.strip().lower().replace("í","i") for c in df.columns]
+    return df
 
-ws_ped = sh.worksheet("Ped Pendientes")
-data_ped = ws_ped.get_all_values()
-data_ped = [row[:6] for row in data_ped]
-headers = data_ped[0]
-df_ped = pd.DataFrame(data_ped[1:], columns=headers)
+df_log = cargar_hoja("Logistica")
+df_ped = cargar_hoja("Ped Pendientes")
+df_rem = cargar_hoja("remisiones_data")
 
 # ==============================
 # --- Limpieza ---
 # ==============================
 df_log['no. pedido'] = df_log['no. pedido'].astype(str).str.strip()
 df_ped['no. pedido'] = df_ped['no. pedido'].astype(str).str.strip()
-df_ped['Estatus operativo'] = df_ped['Estatus operativo'].astype(str).str.strip()
+if 'estatus operativo' in df_ped.columns:
+    df_ped['estatus operativo'] = df_ped['estatus operativo'].astype(str).str.strip()
+else:
+    st.error("No se encontró la columna 'Estatus operativo' en Ped Pendientes")
 
 estatus_validos = ["FACTURACION/FISICO EMBARQUES", "EMBARQUES"]
-df_ped_filtrado = df_ped[df_ped['Estatus operativo'].isin(estatus_validos)]
+df_ped_filtrado = df_ped[df_ped['estatus operativo'].isin(estatus_validos)]
 
-df_filtrado = df_log.merge(
-    df_ped_filtrado[['no. pedido', 'Estatus operativo']],
-    on="no. pedido",
-    how="inner"
-)
-df_filtrado = df_filtrado[df_filtrado['Remision'].notna() & (df_filtrado['Remision'] != "")]
+# Detectar columna Remision
+rem_col = None
+for col in ['remision','Remision']:
+    if col.lower() in df_log.columns:
+        rem_col = col.lower()
+        break
+
+if rem_col is None:
+    st.error("No se encontró la columna Remision en Logistica")
+else:
+    df_filtrado = df_log.merge(
+        df_ped_filtrado[['no. pedido', 'estatus operativo']],
+        on="no. pedido",
+        how="inner"
+    )
+    df_filtrado = df_filtrado[df_filtrado[rem_col].notna() & (df_filtrado[rem_col] != "")]
 
 # ==============================
 # --- Filtrado Fecha Entrega y Factura ---
@@ -69,23 +84,22 @@ def es_fecha_valida(valor):
     except:
         return False
 
-df_filtrado['Factura'] = df_filtrado['Factura'].astype(str).str.strip().fillna("").str.upper()
-
+df_filtrado['factura'] = df_filtrado.get('factura',"").astype(str).str.strip().fillna("").str.upper()
 df_filtrado = df_filtrado[
-    (~df_filtrado['Fecha Entrega'].apply(es_fecha_valida)) |
-    (df_filtrado['Factura'] == "") |
-    (df_filtrado['Factura'] == "N/A")
+    (~df_filtrado.get('fecha entrega', pd.Series()).apply(es_fecha_valida)) |
+    (df_filtrado['factura'] == "") |
+    (df_filtrado['factura'] == "N/A")
 ].reset_index(drop=True)
 
 # ==============================
 # --- Semáforo Tiempo Facturacion ---
 # ==============================
-if 'Tiempo facturacion' in df_filtrado.columns:
-    df_filtrado['Tiempo facturacion'] = pd.to_timedelta(df_filtrado['Tiempo facturacion'], errors='coerce')
+if 'tiempo facturacion' in df_filtrado.columns:
+    df_filtrado['tiempo facturacion'] = pd.to_timedelta(df_filtrado['tiempo facturacion'], errors='coerce')
 
 def semaforo_facturacion(x):
     if pd.isnull(x):
-        return "⚪"  # color gris claro para datos faltantes
+        return "⚪"
     if x <= pd.Timedelta(hours=3):
         return "🟢"
     elif x <= pd.Timedelta(hours=4):
@@ -93,22 +107,22 @@ def semaforo_facturacion(x):
     else:
         return "🔴"
 
-df_filtrado['Semaforo'] = df_filtrado['Tiempo facturacion'].apply(semaforo_facturacion)
+df_filtrado['semaforo'] = df_filtrado['tiempo facturacion'].apply(semaforo_facturacion)
 
 # ==============================
-# --- Ordenar por semáforo (rojo, amarillo, verde, neutro) ---
+# --- Ordenar por semáforo ---
 # ==============================
-orden = {"🔴": 0, "🟡": 1, "🟢": 2, "⚪": 3}
-df_filtrado['orden_semaforo'] = df_filtrado['Semaforo'].map(orden)
+orden = {"🔴":0, "🟡":1, "🟢":2, "⚪":3}
+df_filtrado['orden_semaforo'] = df_filtrado['semaforo'].map(orden)
 df_filtrado = df_filtrado.sort_values(by="orden_semaforo").reset_index(drop=True)
 
 # ==============================
 # --- KPIs ---
 # ==============================
 total = len(df_filtrado)
-verde_count = (df_filtrado['Semaforo'] == "🟢").sum()
-amarillo_count = (df_filtrado['Semaforo'] == "🟡").sum()
-rojo_count = (df_filtrado['Semaforo'] == "🔴").sum()
+verde_count = (df_filtrado['semaforo']=="🟢").sum()
+amarillo_count = (df_filtrado['semaforo']=="🟡").sum()
+rojo_count = (df_filtrado['semaforo']=="🔴").sum()
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("📊 Total", total)
@@ -119,57 +133,59 @@ col4.metric("🔴 Rojo (>4h)", rojo_count)
 st.markdown("---")
 
 # ==============================
-# --- Detectar remisiones completadas ---
+# --- Detectar remisiones completadas y notificar ---
 # ==============================
-ws_rem = sh.worksheet("remisiones_data")
-data_rem = ws_rem.get_all_records()
-df_rem = pd.DataFrame(data_rem)
-
-df_rem['estado'] = df_rem['estado'].astype(str).str.strip().str.lower()
-df_completadas = df_rem[df_rem['estado'] == "completado"]
-
-if 'notificadas' not in st.session_state:
-    st.session_state.notificadas = set()
-
-nuevas_remisiones = [
-    rem for rem in df_completadas['Remision']
-    if rem not in st.session_state.notificadas
-]
-
-for rem in nuevas_remisiones:
-    st.info(f"🟢 Pedido {rem} listo para facturación")
-
-st.session_state.notificadas.update(nuevas_remisiones)
+if 'estado' in df_rem.columns:
+    df_rem['estado'] = df_rem['estado'].astype(str).str.strip().str.lower()
+    # Detectar columna Remision en remisiones_data
+    rem_col_rem = None
+    for col in ['remision','Remision']:
+        if col.lower() in df_rem.columns:
+            rem_col_rem = col.lower()
+            break
+    if rem_col_rem:
+        df_completadas = df_rem[df_rem['estado'] == "completado"]
+        if 'notificadas' not in st.session_state:
+            st.session_state.notificadas = set()
+        nuevas_remisiones = [
+            rem for rem in df_completadas[rem_col_rem]
+            if rem not in st.session_state.notificadas
+        ]
+        for rem in nuevas_remisiones:
+            st.info(f"🟢 Pedido {rem} listo para facturación")
+        st.session_state.notificadas.update(nuevas_remisiones)
 
 # ==============================
-# --- Preparar tablero tipo grid con remisiones completadas ---
+# --- Preparar tablero tipo grid ---
 # ==============================
-df_filtrado['Completado'] = df_filtrado['Remision'].isin(df_completadas['Remision'])
+df_filtrado['completado'] = False
+if rem_col_rem:
+    df_filtrado['completado'] = df_filtrado[rem_col].isin(df_completadas[rem_col_rem])
 
 def color_tablero(row):
-    if row['Completado']:
-        return "#cce5ff"  # azul claro para remisiones completadas
-    if row['Semaforo'] == "🟢":
+    if row['completado']:
+        return "#cce5ff"  # azul claro
+    if row['semaforo']=="🟢":
         return "#d4edda"
-    if row['Semaforo'] == "🟡":
+    if row['semaforo']=="🟡":
         return "#fff3cd"
-    if row['Semaforo'] == "🔴":
+    if row['semaforo']=="🔴":
         return "#f8d7da"
     return "#e9ecef"
 
 df_filtrado['color'] = df_filtrado.apply(color_tablero, axis=1)
 
 # ==============================
-# --- Renderizar tablero con icono de completado ---
+# --- Renderizar tablero ---
 # ==============================
 cuadros_por_fila = 22
 fila = []
 
 for i, row in df_filtrado.iterrows():
     col_color = row['color']
-    completado_label = "⚡ LISTO" if row['Completado'] else ""
+    completado_label = "⚡ LISTO" if row['completado'] else ""
     
-    fila.append((row['Remision'], row['Semaforo'], col_color, completado_label))
+    fila.append((row[rem_col], row['semaforo'], col_color, completado_label))
 
     if len(fila) == cuadros_por_fila or i == df_filtrado.index[-1]:
         cols = st.columns(len(fila))
