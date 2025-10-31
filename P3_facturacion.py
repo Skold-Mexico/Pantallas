@@ -119,27 +119,65 @@ col4.metric("🔴 Rojo (>4h)", rojo_count)
 st.markdown("---")
 
 # ==============================
-# --- Tablero tipo grid ---
+# --- Detectar remisiones completadas ---
+# ==============================
+ws_rem = sh.worksheet("remisiones_data")
+data_rem = ws_rem.get_all_records()
+df_rem = pd.DataFrame(data_rem)
+
+df_rem['estado'] = df_rem['estado'].astype(str).str.strip().str.lower()
+df_completadas = df_rem[df_rem['estado'] == "completado"]
+
+if 'notificadas' not in st.session_state:
+    st.session_state.notificadas = set()
+
+nuevas_remisiones = [
+    rem for rem in df_completadas['Remision']
+    if rem not in st.session_state.notificadas
+]
+
+for rem in nuevas_remisiones:
+    st.info(f"🟢 Pedido {rem} listo para facturación")
+
+st.session_state.notificadas.update(nuevas_remisiones)
+
+# ==============================
+# --- Preparar tablero tipo grid con remisiones completadas ---
+# ==============================
+df_filtrado['Completado'] = df_filtrado['Remision'].isin(df_completadas['Remision'])
+
+def color_tablero(row):
+    if row['Completado']:
+        return "#cce5ff"  # azul claro para remisiones completadas
+    if row['Semaforo'] == "🟢":
+        return "#d4edda"
+    if row['Semaforo'] == "🟡":
+        return "#fff3cd"
+    if row['Semaforo'] == "🔴":
+        return "#f8d7da"
+    return "#e9ecef"
+
+df_filtrado['color'] = df_filtrado.apply(color_tablero, axis=1)
+
+# ==============================
+# --- Renderizar tablero con icono de completado ---
 # ==============================
 cuadros_por_fila = 22
 fila = []
 
 for i, row in df_filtrado.iterrows():
-    color = (
-        "#d4edda" if row['Semaforo'] == "🟢" else
-        "#fff3cd" if row['Semaforo'] == "🟡" else
-        "#f8d7da" if row['Semaforo'] == "🔴" else "#e9ecef"
-    )
-
-    fila.append((row['Remision'], row['Semaforo'], color))
+    col_color = row['color']
+    completado_label = "⚡ LISTO" if row['Completado'] else ""
+    
+    fila.append((row['Remision'], row['Semaforo'], col_color, completado_label))
 
     if len(fila) == cuadros_por_fila or i == df_filtrado.index[-1]:
         cols = st.columns(len(fila))
-        for c, (rem, sem, col_color) in zip(cols, fila):
+        for c, (rem, sem, color_fila, label) in zip(cols, fila):
             c.markdown(
                 f"""
                 <div style="
-                    background-color:{col_color};
+                    background-color:{color_fila};
                     border-radius:6px;
                     padding:6px;
                     text-align:center;
@@ -148,7 +186,9 @@ for i, row in df_filtrado.iterrows():
                     font-size:12px;
                     white-space:nowrap;
                 ">
-                    <strong>{rem}</strong><br>{sem}
+                    <strong>{rem}</strong><br>
+                    {sem}<br>
+                    <span style="font-size:10px; color:#004085;">{label}</span>
                 </div>
                 """,
                 unsafe_allow_html=True

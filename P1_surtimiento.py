@@ -25,7 +25,7 @@ except Exception:
 
 credenciales = Credentials.from_service_account_info(
     google_creds,
-    scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
 gc = gspread.authorize(credenciales)
 sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
@@ -162,3 +162,57 @@ for i, row in df.iterrows():
                 unsafe_allow_html=True
             )
         fila = []
+import time
+
+# ==============================
+# --- Cronómetros por fila ---
+# ==============================
+st.markdown("## ⏱ Cronómetros por fila")
+
+# Columnas auxiliares en Google Sheets
+col_inicio = 16  # HoraInicioP (P)
+col_pausa = 17   # HoraPausaP (Q)
+col_total = 18   # TiempoTotalP (R)
+
+placeholder = st.empty()  # para actualizar la tabla en vivo
+
+# Loop de actualización en tiempo real (mientras la app esté abierta)
+while True:
+    for idx, row in df.iterrows():
+        fila_hoja = idx + 2  # ajustar según encabezados de la hoja
+
+        # Leer valores actuales de la hoja (por fila)
+        valores = ws.row_values(fila_hoja)
+        inicio_str = valores[col_inicio-1] if len(valores) >= col_inicio else ""
+        pausa_str = valores[col_pausa-1] if len(valores) >= col_pausa else ""
+        total_str = valores[col_total-1] if len(valores) >= col_total else ""
+
+        # Parsear valores
+        inicio = datetime.strptime(inicio_str, "%d/%m/%Y %H:%M:%S") if inicio_str else None
+        pausa = datetime.strptime(pausa_str, "%d/%m/%Y %H:%M:%S") if pausa_str else None
+        total = pd.to_timedelta(total_str) if total_str else pd.Timedelta(0)
+
+        # Detectar inicio automático: si hay valor en A y no hay inicio
+        if row['Remision'] and not inicio:
+            inicio = datetime.now()
+            ws.update_cell(fila_hoja, col_inicio, inicio.strftime("%d/%m/%Y %H:%M:%S"))
+            ws.update_cell(fila_hoja, col_total, "0:00:00")
+
+        # Detectar pausa automática: si hay valor en D y no estaba pausado
+        if row['Fecha de SURTIMIENTO'] and not pausa:
+            pausa = datetime.now()
+            total += (pausa - inicio)
+            inicio = None
+            ws.update_cell(fila_hoja, col_pausa, pausa.strftime("%d/%m/%Y %H:%M:%S"))
+            ws.update_cell(fila_hoja, col_total, str(total).split(".")[0])
+
+        # Calcular tiempo transcurrido
+        tiempo = total + ((datetime.now() - inicio) if inicio else pd.Timedelta(0))
+        df.at[idx, 'TiempoP'] = str(tiempo).split(".")[0]
+
+    # Mostrar cronómetros en Streamlit
+    with placeholder.container():
+        for _, row in df.iterrows():
+            st.write(f"{row['Remision']} — Tiempo: {row['TiempoP']}")
+
+    time.sleep(1)  # actualizar cada segundo
