@@ -22,7 +22,7 @@ except Exception:
 
 credenciales = Credentials.from_service_account_info(
     google_creds,
-    scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    scopes=["https://www.googleapis.com/auth/spreadsheets"]
 )
 gc = gspread.authorize(credenciales)
 sh = gc.open_by_key("1UTPaPqfVZ5Z6dmlz9OMPp4W1mMcot9_piz7Bctr5S-I")
@@ -34,7 +34,6 @@ def cargar_hoja(nombre_hoja):
     ws = sh.worksheet(nombre_hoja)
     data = ws.get_all_values()
     df = pd.DataFrame(data[1:], columns=data[0])
-    # Normalizar nombres de columna: minúsculas, sin espacios, sin acentos
     df.columns = [c.strip().lower().replace("í","i") for c in df.columns]
     return df
 
@@ -133,38 +132,70 @@ col4.metric("🔴 Rojo (>4h)", rojo_count)
 st.markdown("---")
 
 # ==============================
+# --- MARCAR COMO FACTURADA (OPCIÓN B) ---
+# ==============================
+df_rem['estado'] = df_rem['estado'].astype(str).str.strip().str.lower()
+
+rem_col_rem = None
+for col in ['remision','Remision']:
+    if col.lower() in df_rem.columns:
+        rem_col_rem = col.lower()
+        break
+
+df_pend_fact = df_rem[df_rem['estado'] == "completado"]
+
+st.markdown("### 🧾 Marcar remisión como facturada")
+
+if rem_col_rem and not df_pend_fact.empty:
+    rem_a_facturar = st.selectbox(
+        "Selecciona la remisión",
+        df_pend_fact[rem_col_rem].astype(str).unique()
+    )
+
+    if st.button("✅ Marcar como FACTURADA"):
+        ws_rem = sh.worksheet("remisiones_data")
+        fila_sheet = df_rem.index[
+            df_rem[rem_col_rem].astype(str) == str(rem_a_facturar)
+        ][0] + 2
+
+        col_estado = df_rem.columns.get_loc("estado") + 1
+        ws_rem.update_cell(fila_sheet, col_estado, "facturada")
+
+        st.success(f"🧾 Remisión {rem_a_facturar} marcada como FACTURADA")
+        st.rerun()
+else:
+    st.info("No hay remisiones pendientes por facturar")
+
+# ==============================
 # --- Detectar remisiones completadas y notificar ---
 # ==============================
-if 'estado' in df_rem.columns:
-    df_rem['estado'] = df_rem['estado'].astype(str).str.strip().str.lower()
-    # Detectar columna Remision en remisiones_data
-    rem_col_rem = None
-    for col in ['remision','Remision']:
-        if col.lower() in df_rem.columns:
-            rem_col_rem = col.lower()
-            break
-    if rem_col_rem:
-        df_completadas = df_rem[df_rem['estado'] == "completado"]
-        if 'notificadas' not in st.session_state:
-            st.session_state.notificadas = set()
-        nuevas_remisiones = [
-            rem for rem in df_completadas[rem_col_rem]
-            if rem not in st.session_state.notificadas
-        ]
-        for rem in nuevas_remisiones:
-            st.info(f"🟢 Pedido {rem} listo para facturación")
-        st.session_state.notificadas.update(nuevas_remisiones)
+df_completadas = pd.DataFrame()
+
+if 'estado' in df_rem.columns and rem_col_rem:
+    df_completadas = df_rem[df_rem['estado'] == "completado"]
+    if 'notificadas' not in st.session_state:
+        st.session_state.notificadas = set()
+
+    nuevas_remisiones = [
+        rem for rem in df_completadas[rem_col_rem]
+        if rem not in st.session_state.notificadas
+    ]
+
+    for rem in nuevas_remisiones:
+        st.info(f"🟢 Pedido {rem} listo para facturación")
+
+    st.session_state.notificadas.update(nuevas_remisiones)
 
 # ==============================
 # --- Preparar tablero tipo grid ---
 # ==============================
 df_filtrado['completado'] = False
-if rem_col_rem:
+if rem_col_rem and not df_completadas.empty:
     df_filtrado['completado'] = df_filtrado[rem_col].isin(df_completadas[rem_col_rem])
 
 def color_tablero(row):
     if row['completado']:
-        return "#cce5ff"  # azul claro
+        return "#cce5ff"
     if row['semaforo']=="🟢":
         return "#d4edda"
     if row['semaforo']=="🟡":
